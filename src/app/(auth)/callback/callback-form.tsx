@@ -59,7 +59,7 @@ export function CallbackForm() {
       });
       if (licenseResponse.success) {
         console.log(licenseResponse.message);
-        toast.success("Request successful. Please wait...");
+        toast.success("Request successful. Please Wait...");
         router.push("/admin");
       } else {
         toast.error("An Error Occurred");
