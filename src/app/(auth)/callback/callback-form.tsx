@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
-import { useState } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { useState, useEffect } from "react";
 import { ArrowUpFromDot, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { dev_emails } from "@/lib/utils";
@@ -38,7 +38,6 @@ const formSchema = z.object({
 });
 
 export function CallbackForm() {
-  // 1. Define your form.
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,10 +46,40 @@ export function CallbackForm() {
   });
 
   const router = useRouter();
+  const { isSignedIn, isLoaded } = useAuth();
+  const { user } = useUser();
   const [submitting, setSubmitting] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [checkingUser, setCheckingUser] = useState(true);
 
-  // 2. Define a submit handler.
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user) return;
+
+    const email = user.primaryEmailAddress?.emailAddress;
+    if (!email) {
+      setCheckingUser(false);
+      return;
+    }
+
+    const checkUser = async () => {
+      try {
+        const res = await client.auth.checkUserExists({ email });
+
+        if (res.exists) {
+          router.replace("/password"); // existing user
+        }
+      } catch (err) {
+        console.error("User check failed:", err);
+      } finally {
+        setCheckingUser(false);
+      }
+    };
+
+    checkUser();
+  }, [isLoaded, isSignedIn, user, router]);
+
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setSubmitting(true);
     try {
@@ -59,7 +88,7 @@ export function CallbackForm() {
       });
       if (licenseResponse.success) {
         console.log(licenseResponse.message);
-        toast.success("Request successful. Please Wait...");
+        toast.success("Request successful. Please wait...");
         router.push("/admin");
       } else {
         toast.error("An Error Occurred");
@@ -89,19 +118,29 @@ export function CallbackForm() {
     }),
   );
 
-  const { isSignedIn, isLoaded } = useAuth();
-  if (!isLoaded) {
-    return <>Loading...</>;
+
+  if (!isLoaded || checkingUser) {
+    return (
+      <Card className="w-full max-w-sm">
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="animate-spin size-6" />
+          <span className="ml-2">Loading...</span>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (!isSignedIn) {
     toast.error("You are currently not signed-in.");
+
+
+    return null;
   }
 
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle>Enter developer liscense key</CardTitle>
+        <CardTitle>Enter developer license key</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -116,7 +155,7 @@ export function CallbackForm() {
                     <Input placeholder="******" {...field} />
                   </FormControl>
                   <FormDescription>
-                    Retrieve your developer liscense key by contacting the
+                    Retrieve your developer license key by contacting the
                     developer of this website.
                   </FormDescription>
                   <FormMessage />
@@ -164,7 +203,6 @@ export function CallbackForm() {
             </span>
           ) : (
             <span className="flex items-center gap-1">
-              {" "}
               <ArrowUpFromDot className="size-4" /> Request a license key first.
             </span>
           )}
